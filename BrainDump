@@ -1,0 +1,103 @@
+== Task List ==
+- *DONE* Setup plugin skeleton so it can be activated inside WordPress
+- *DONE* Build form
+--- *DONE* Don't forget the subscription and certificate info!
+- *DONE* Save form items in wp_options
+- *NOT GOING TO IMPLEMENT* Add logic to uninstall to remove settings? (deactivate does not touch them)
+- *DONE* Create custom cron schedule (15 minutes and 5 minutes) http://wpengineer.com/1908/use-wordpress-cron/
+- *DONE* Do a check to see if a class is available, if not load packaged WAZ PHP SDK
+- *DONE* Create custom post type for diagnostics
+- Pull diagnostics from table and place in database
+---- Code to retrieve from table
+---- How to create a new post from code?
+---- Title = Resource: Usage: Instance
+- Add logic to uninstall to remove diagnostics from db? (deactivate does not touch them)
+- Retrieve last 15 minutes of diagnostics from database
+--- If data exists check against triggers
+- Setup scaling code
+- Hook triggers into scaling code - cron
+- Create code to manage cron jobs
+--- Very generic, should read and write
+--- Create ability to check for prefix
+- Create dummy cron with prefix
+- Create code to list crons with prefix
+- Build form to add schedule rules to cron
+- Add logic to erase crons on deactivate
+--- Possibly save in wp_options and on activate check for the crons and restore them
+- Add dashboard widget that shows instance stats
+
+== Certificate storage ==
+The text for the cert could be stored in the database and the file created on the fly?
+
+== Plugin Pages ==
+- Main page displays stats and allows manual override
+- Settings (WAZ Subscription, cert, auto/manual, dashboard (on|off), etc)
+- Triggers
+- Schedule
+
+== Scheduler ==
+User needs a way to create custom rules on a schedule.
+
+- New post type: wazScalerSchedule
+- New post type should NOT be publicly viewable, but may be from the backend
+
+Schedule items should include
+- Time to execute
+- Pulldown menu to (Scale In, Scale Out)
+- Date rule becomes enabled
+- Date rule becomes disabled
+
+Could transients be used here to ensure these only get executed once?
+
+Might it be possible to simply use the cron system completely for this?
+- Prefix all rules
+- To list rules
+--- Pull all cron items from db
+--- Filter out items that do not have the prefix
+--- Display list
+- Take a look at the MediaTemple cron UI for inspiration
+
+== Handling Diagnostic Information ==
+By default diagnostic information is stored in a table. This is awkward to use.
+Since WordPress is using a database all the table entries should be pulled from
+the table and stored in the database
+
+*NOTE: Table here refers to a Windows Azure storage table, not a table in the database
+
+
+== Cron Jobs ==
+- (Every 5 minutes) Pull diagnostics from table and insert into database
+- (Every 15 minutes) Retrieve diagnostics from db and check last 15 minutes against triggers
+- Look at how the WP cron system works and possibly add scheduler items here
+- Need to create custom cron hook that will add additional options http://codex.wordpress.org/Function_Reference/wp_get_schedules
+
+http://wpengineer.com/1908/use-wordpress-cron/
+
+== Custom Post Types ==
+- Custom rules scheduler (only if not using cron)
+- Diagnostics information
+
+== wp_options ==
+For ease triggers could be stored as a JSON array, containing all the triggers.
+
+Alternatively, if we want to make it easier for users to manipulate settings directly
+from the database each setting could be stored as a seperate option
+
+== Deactivate Code ==
+http://codex.wordpress.org/Function_Reference/register_deactivation_hook
+Store deactivation code in decactivate.php
+
+- Erase crons
+- Remove diagnostics
+- Remove settings? probably not
+
+== Uninstall code ==
+- Remove diagnostics
+- Erase crons
+- Remove settings
+
+== Activation ==
+http://codex.wordpress.org/Function_Reference/register_activation_hook
+
+- Pull crons from wp_options
+- Create needed database tables
