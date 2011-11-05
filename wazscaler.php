@@ -1,6 +1,6 @@
 <?php
 /*
-Plugin Name: Windows Azure Scaler
+Plugin Name: Windows Azure Scaling
 Plugin URI: https://github.com/blobaugh/WordPress-Windows-Azure-Scaling-Plugin
 Description: Plugin to easily enable scaling Windows Azure from WordPress
 Version: 0.1
@@ -47,10 +47,14 @@ if( is_admin() ) {
     add_filter( 'cron_schedules', 'wazScale_additional_crons' );
 
     // Run cron every 5 minutes to pull diagnostics from WAZ tables into the db
-//    if ( !wp_next_scheduled('wazScale_diagnostics_transfer') ) {
-//        wp_schedule_event( time(), '5minutes', 'wazScale_diagnostics_transfer' ); // hourly, daily and twicedaily
-//    }
+    if ( !wp_next_scheduled('wazScale_diagnostics_transfer') ) {
+        wp_schedule_event( time(), '5minutes', 'wazScale_diagnostics_transfer' ); // hourly, daily and twicedaily
+    }
+    if ( !wp_next_scheduled('wazScale_scale') ) {
+        wp_schedule_event( time(), '15minutes', 'wazScale_scale' ); // hourly, daily and twicedaily
+    }
     add_action('wazScale_diagnostics_transfer', 'wazScale_diagnostics_transfer'); // Adds a hook to the function that will be run
+    add_action('wazScale_scale', 'wazScale_scale'); // Adds a hook to the function that will be run
     // Uncomment the following line to remove the diagnostics transfer cron
     //wp_clear_scheduled_hook('wazScale_diagnostics_transfer');
 
@@ -98,7 +102,7 @@ function wazScale_admin_schedule_menu() { echo 'wazScale_admin_schedule_menu'; }
 function wazScale_admin_settings_menu() {
     // If the user has input all the values update the plugin options
     if(isset($_POST['submit'])) {
-        update_option(OP_SETTINGS, array('storage_endpoint' => $_POST['storage_endpoint'], 'storage_key' => $_POST['storage_key'],'subscription_id' => $_POST['subscription_id'], 'certificate' => $_POST['certificate'], 'certificate_thumbprint' => $_POST['certificate_thumbprint']));
+        update_option(OP_SETTINGS, array('deployment_slot' => $_POST['deployment_slot'], 'deployment_endpoint' => $_POST['deployment_endpoint'], 'deployment_role_name' => $_POST['deployment_role_name'], 'storage_endpoint' => $_POST['storage_endpoint'], 'storage_key' => $_POST['storage_key'],'subscription_id' => $_POST['subscription_id'], 'certificate' => $_POST['certificate'], 'certificate_thumbprint' => $_POST['certificate_thumbprint']));
         echo 'figure out how to create an alert box with the result wazscaler:wazScale_admin_settings_menu';
     }
 
@@ -126,29 +130,58 @@ function wazScale_setup_cron() {
  */
 function wazScale_addmenus() {
     add_utility_page( "Windows Azure Scaler Statistics", "WAZ Scaler", 'activate_plugins', 'wazScaler', 'wazScale_admin_menu', plugins_url() . '/' . basename(__DIR__) . '/azure-logo-icon.png' );
-    //add_submenu_page( $parent_slug, $page_title, $menu_title, $capability, $menu_slug, $function );
     add_submenu_page( 'wazScaler', "Windows Azure Scaler Triggers", "Triggers", 'activate_plugins', 'wazScaler_triggers', 'wazScale_admin_triggers_menu' );
     add_submenu_page( 'wazScaler', "Windows Azure Scaler Schedule", "Schedule", 'activate_plugins', 'wazScaler_schedule', 'wazScale_admin_schedule_menu' );
     add_submenu_page( 'wazScaler', "Windows Azure Scaler Settings", "Settings", 'activate_plugins', 'wazScaler_settings', 'wazScale_admin_settings_menu' );
 }
 
-add_action('init', 'wazScale_scale');
+//add_action('init', 'wazScale_scale');
 
 function wazScale_scale() {
     $scale_by = wazScale_check_triggers();
     $settings = get_option( OP_SETTINGS );
     $triggers = get_option( OP_TRIGGERS );
-  
-    // Get current number of instances
-    $current_instances = 2;
+   
+    
 
-    if( $scale_by < 0 && $current_instances > $triggers['min_instances'] ) {
-        echo "Scaling in";
-    } elseif($scale_by > 0 && $current_instances < $triggers['max_instances']) {
-        echo "Scaling out";
+    /*
+     * Create the temporary certificate file for the Windows Azure SDK for PHP
+     * Service Management API calls. This will use a temp file which places the file
+     * in a non-publically accessable location and removes it automagically after
+     * use. This adds a touch of security as outside
+     * visitors cannot access the filesystem and view the file
+     */
+    file_put_contents(sys_get_temp_dir() . "/tmpCert.pem", $settings['certificate']);
+    $management_client = new Microsoft_WindowsAzure_Management_Client($settings['subscription_id'], sys_get_temp_dir() . "/tmpCert.pem", $settings['certificate_thumbnail']);
+
+    // Get current number of instances - WARNING this can take some time.
+    // Do not do this on a every page load
+    $instance_count = wazScale_get_num_instances($management_client->getDeploymentBySlot($settings['deployment_endpoint'], $settings['deployment_slot'])->roleinstancelist, $settings['deployment_role_name']);
+
+    if( $scale_by < 0 && $instance_count > $triggers['min_instances'] ) {
+        try {
+            $management_client->setInstanceCountBySlot($settings['deployment_endpoint'], $settings['deployment_slot'], $settings['deployment_role_name'], $instance_count - 1);
+        } catch ( Exception $e ) {}
+
+    } elseif( $scale_by > 0 && $instance_count < $triggers['max_instances'] ) {
+        try {
+            $management_client->setInstanceCountBySlot($settings['deployment_endpoint'], $settings['deployment_slot'], $settings['deployment_role_name'], $instance_count + 1);
+        } catch ( Exception $e ) {}
     }
+
+    // Delete certificate file
+    unlink( sys_get_temp_dir() . "/tmpCert.pem" );
 }
 
+
+function wazScale_get_num_instances( $instances, $role_name ) {
+    $count = 0;
+    foreach( $instances as $instance ) {
+        if ( $instance['rolename'] == $role_name )
+            $count++;
+    }
+    return $count;
+}
 /**
  * Checks the given performance metrics to determine whether or not to scale
  * in or out. Uses the averages of all instances to check against
@@ -378,6 +411,47 @@ function wazScale_debug($what) {
    var_dump($what);
    echo '</pre>';
 }
+
+/**
+ * Generic function to show a message to the user using WP's
+ * standard CSS classes to make use of the already-defined
+ * message colour scheme.
+ *
+ * @param $message The message you want to tell the user.
+ * @param $errormsg If true, the message is an error, so use
+ * the red message style. If false, the message is a status
+  * message, so use the yellow information message style.
+ */
+function wazScale_show_message($message, $errormsg = false) {
+	if ($errormsg) {
+		echo '<div id="message" class="error">';
+	}
+	else {
+		echo '<div id="message" class="updated fade">';
+	}
+
+	echo "<p><strong>$message</strong></p></div>";
+}
+
+/**
+ * Just show our message (with possible checking if we only want
+ * to show message to certain users.
+ */
+function wazScale_check_settings() {
+
+    // Only show to admins
+    if (current_user_can('manage_options') && !(get_option(OP_SETTINGS))) {
+
+        wazScale_show_message("Configuration not found for the Windows Azure Scaling plugin! Please configure settings now", true);
+    }
+}
+
+/**
+  * Call showAdminMessages() when showing other admin
+  * messages. The message only gets shown in the admin
+  * area, but not on the frontend of your WordPress site.
+  */
+add_action('admin_notices', 'wazScale_check_settings');
 
  /* ****************************************************************************
  * **************************** END FUNCTIONS **********************************

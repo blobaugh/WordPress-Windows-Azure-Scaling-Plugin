@@ -5,3 +5,4 @@ if(!isset($wp)) { die('Must be run from a WordPress instance'); }
 
 
 wp_clear_scheduled_hook('wazScale_diagnostics_transfer');
+wp_clear_scheduled_hook('wazScale_scale');

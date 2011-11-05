@@ -1,4 +1,4 @@
-== Task List ==
+== Primary Task List ==
 - *DONE* Setup plugin skeleton so it can be activated inside WordPress
 - *DONE* Build form
 --- *DONE* Don't forget the subscription and certificate info!
@@ -11,30 +11,32 @@
 ---- *DONE* Code to retrieve from table
 ---- *DONE* How to create a new post from code?
 ---- *DONE* Title = Resource: Usage: Instance
-- *NOTHINGTODO* Add logic to uninstall to remove diagnostics from db? (deactivate does not touch them)
-- ******************************** WHY DOES THIS NOT WORK? USING DUMMY DATA NOW* Add cron to pull diagnostics from the table and place in db
-- Retrieve last 15 minutes of diagnostics from database
+- *DONE* Add cron to pull diagnostics from the table and place in db
+- *DONE*Retrieve last 15 minutes of diagnostics from database
 --- *DONE* Create an array of the useful metric info
---- If there are no posts skip the checks
---- Function returns data in a usable state - See averages() at https://github.com/Interop-Bridges/Windows-Azure-Sample-Kit-4-PHP/blob/master/dealoftheday_sample/Worker/lib/functions.php
---- If data exists check against triggers
-- Setup scaling code
-- Hook triggers into scaling code - cron
+--- *DONE* If there are no posts skip the checks
+--- *DONE* Function returns data in a usable state - See averages() at https://github.com/Interop-Bridges/Windows-Azure-Sample-Kit-4-PHP/blob/master/dealoftheday_sample/Worker/lib/functions.php
+--- *DONE* If data exists check against triggers
+- *DONE* Setup scaling code
+- *DONE* Hook triggers into scaling code - cron
+- *DONE* Add logic to erase crons on deactivate
+- Add check to see if any options are set. If not tell the user to set them in a message
+
+=== Secondary Tasks ===
+- Convert Deployment Slot on settings page to select menu
+- Create code to list crons with prefix
 - Create code to manage cron jobs
 --- Very generic, should read and write
 --- Create ability to check for prefix
-- Create dummy cron with prefix
-- Create code to list crons with prefix
 - Build form to add schedule rules to cron
-- Add logic to erase crons on deactivate
 --- Possibly save in wp_options and on activate check for the crons and restore them
 - Add dashboard widget that shows instance stats
-- Add check to see if any options are set. If not tell the user to set them in a message
-- Ensure diagnostics info is getting pulled from the db for only last 15 minutes
+- *DONE* Ensure diagnostics info is getting pulled from the db for only last 15 minutes
 - Update settings form with checkboxes for types of triggers the user wants to check
 ---- Store in wazScale_settings -> wp_options
 ---- Update triggers from to read from wp_options and only provide fields checked
 ---- Update wazScale_check_triggers() to only check triggers in wp_options
+- Write a more creative admin message if options do not exist
 
 == Certificate storage ==
 The text for the cert could be stored in the database and the file created on the fly?
