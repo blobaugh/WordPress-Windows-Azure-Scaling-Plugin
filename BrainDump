@@ -7,12 +7,16 @@
 - *DONE* Create custom cron schedule (15 minutes and 5 minutes) http://wpengineer.com/1908/use-wordpress-cron/
 - *DONE* Do a check to see if a class is available, if not load packaged WAZ PHP SDK
 - *DONE* Create custom post type for diagnostics
-- Pull diagnostics from table and place in database
----- Code to retrieve from table
----- How to create a new post from code?
----- Title = Resource: Usage: Instance
-- Add logic to uninstall to remove diagnostics from db? (deactivate does not touch them)
+- *DONE* Pull diagnostics from table and place in database
+---- *DONE* Code to retrieve from table
+---- *DONE* How to create a new post from code?
+---- *DONE* Title = Resource: Usage: Instance
+- *NOTHINGTODO* Add logic to uninstall to remove diagnostics from db? (deactivate does not touch them)
+- ******************************** WHY DOES THIS NOT WORK? USING DUMMY DATA NOW* Add cron to pull diagnostics from the table and place in db
 - Retrieve last 15 minutes of diagnostics from database
+--- *DONE* Create an array of the useful metric info
+--- If there are no posts skip the checks
+--- Function returns data in a usable state - See averages() at https://github.com/Interop-Bridges/Windows-Azure-Sample-Kit-4-PHP/blob/master/dealoftheday_sample/Worker/lib/functions.php
 --- If data exists check against triggers
 - Setup scaling code
 - Hook triggers into scaling code - cron
@@ -25,6 +29,12 @@
 - Add logic to erase crons on deactivate
 --- Possibly save in wp_options and on activate check for the crons and restore them
 - Add dashboard widget that shows instance stats
+- Add check to see if any options are set. If not tell the user to set them in a message
+- Ensure diagnostics info is getting pulled from the db for only last 15 minutes
+- Update settings form with checkboxes for types of triggers the user wants to check
+---- Store in wazScale_settings -> wp_options
+---- Update triggers from to read from wp_options and only provide fields checked
+---- Update wazScale_check_triggers() to only check triggers in wp_options
 
 == Certificate storage ==
 The text for the cert could be stored in the database and the file created on the fly?
