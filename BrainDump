@@ -20,9 +20,12 @@
 - *DONE* Setup scaling code
 - *DONE* Hook triggers into scaling code - cron
 - *DONE* Add logic to erase crons on deactivate
-- Add check to see if any options are set. If not tell the user to set them in a message
+- *DONE* Add check to see if any options are set. If not tell the user to set them in a message
 
 === Secondary Tasks ===
+- Add checks to cron to ensure the actions are only completed if valid settings are available
+- If function_exists(azure_getconfig()) use those values for INITIAL settings
+- Add numbers to triggers page
 - Convert Deployment Slot on settings page to select menu
 - Create code to list crons with prefix
 - Create code to manage cron jobs
@@ -37,9 +40,18 @@
 ---- Update triggers from to read from wp_options and only provide fields checked
 ---- Update wazScale_check_triggers() to only check triggers in wp_options
 - Write a more creative admin message if options do not exist
+- Checkbox in settings to remove settings on uninstall
+- Checkbox in settings to remove diagnostics on uninstall
+
+
+
+*************************************************************************************
+Anything below this line may not make sense and may not be implemented or implemented
+completely different. The following is only a brainstorm dump
+*************************************************************************************
 
 == Certificate storage ==
-The text for the cert could be stored in the database and the file created on the fly?
+The text for the cert could be stored in the database and the file created on the fly for security
 
 == Plugin Pages ==
 - Main page displays stats and allows manual override

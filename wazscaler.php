@@ -8,6 +8,7 @@ Author: Ben Lobaugh
 Author URI: http://ben.lobaugh.net
 */
 
+
 /**
  *
  */
@@ -31,40 +32,34 @@ if(!class_exists('Microsoft_WindowsAzure_Diagnostics_Manager')) {
 /*
  * Global Setup
  */
+// Create the custom post type
 add_action('init', 'wazScale_diagnostics_post_type');
-//add_action('init', 'wazScale_setup_cron');
+
+// Add additional time slots to cron
+add_filter( 'cron_schedules', 'wazScale_additional_crons' );
+
+
+// Create a hook for the cron diagnostics transfer trigger
+add_action('wazScale_diagnostics_transfer', 'wazScale_diagnostics_transfer');
+
+// Create a hook for the cron performance/scaling check
+add_action('wazScale_scale', 'wazScale_scale');
+
+// Add activation hook
+register_activation_hook( __FILE__, 'wazScale_activate' );
+
+// Add deactivation hook
+register_deactivation_hook( __FILE__, 'wazScale_deactivate' );
 
 /*
  * All the following code should only be run in the backend
  */
 if( is_admin() ) {
-    
-
     // Add admin menu pages
     add_action('admin_menu', 'wazScale_addmenus');
 
-    // Add additional time slots to cron
-    add_filter( 'cron_schedules', 'wazScale_additional_crons' );
-
-    // Run cron every 5 minutes to pull diagnostics from WAZ tables into the db
-    if ( !wp_next_scheduled('wazScale_diagnostics_transfer') ) {
-        wp_schedule_event( time(), '5minutes', 'wazScale_diagnostics_transfer' ); // hourly, daily and twicedaily
-    }
-    if ( !wp_next_scheduled('wazScale_scale') ) {
-        wp_schedule_event( time(), '15minutes', 'wazScale_scale' ); // hourly, daily and twicedaily
-    }
-    add_action('wazScale_diagnostics_transfer', 'wazScale_diagnostics_transfer'); // Adds a hook to the function that will be run
-    add_action('wazScale_scale', 'wazScale_scale'); // Adds a hook to the function that will be run
-    // Uncomment the following line to remove the diagnostics transfer cron
-    //wp_clear_scheduled_hook('wazScale_diagnostics_transfer');
-
-
-    // Add activation hook
-    register_activation_hook( __FILE__, 'wazScale_activate' );
-
-    // Add deactivation hook
-    register_deactivation_hook( __FILE__, 'wazScale_deactivate' );
-
+    // Check settings and alert the admin if anything is amiss
+    add_action('admin_notices', 'wazScale_check_settings');
 }
 
 
@@ -73,7 +68,40 @@ if( is_admin() ) {
  * *****************************************************************************
  */
 
+/**
+ * Used to add the additional schedules for WordPress cron
+ * @param Array $schedules
+ * @return Array
+ */
+function wazScale_additional_crons( $schedules ) {
 
+ 	// Adds once weekly to the existing schedules.
+ 	$schedules['weekly'] = array(
+ 		'interval' => 604800,
+ 		'display' => __( 'Once Weekly' )
+ 	);
+        $schedules['15minutes'] = array(
+                'interval' => 900,
+                'display' => __('Every 15 Minutes')
+        );
+        $schedules['5minutes'] = array(
+                'interval' => 300,
+                'display' => __('Every 5 Minutes')
+        );
+        $schedules['5seconds'] = array(
+                'interval' => 5,
+                'display' => __('Every 5 Seconds')
+        );
+        $schedules['15seconds'] = array(
+                'interval' => 15,
+                'display' => __('Every 15 Seconds')
+        );
+ 	return $schedules;
+ }
+
+/**
+ * Main menu when clicking on 'WAZ Scaling' in wp-admin
+ */
 function wazScale_admin_menu() { echo 'wazScale_admin_menu'; }
 
 /**
@@ -110,34 +138,38 @@ function wazScale_admin_settings_menu() {
     require_once('admin_settings_menu.php');
 }
 
+/**
+ * Logic to run on plugin activation
+ */
 function wazScale_activate() {
     //wp_schedule_event( time(), '5minutes', 'wazScale_diagnostics_transfer' ); // hourly, daily and twicedaily
+    require_once('activate.php');
 }
-    
+
+/**
+ * Logic to run on plugin deactivation
+ */
 function wazScale_deactivate() {
     require_once('deactivate.php');
 }
 
-function wazScale_setup_cron() {
-    if ( !wp_next_scheduled('wazScale_diagnostics_transfer') ) {
-        wp_schedule_event( time(), '5minutes', 'wazScale_diagnostics_transfer' ); // hourly, daily and twicedaily
-    }
-}
 
 
 /**
  * Adds the main admin menu and sub menu items
  */
 function wazScale_addmenus() {
-    add_utility_page( "Windows Azure Scaler Statistics", "WAZ Scaler", 'activate_plugins', 'wazScaler', 'wazScale_admin_menu', plugins_url() . '/' . basename(__DIR__) . '/azure-logo-icon.png' );
-    add_submenu_page( 'wazScaler', "Windows Azure Scaler Triggers", "Triggers", 'activate_plugins', 'wazScaler_triggers', 'wazScale_admin_triggers_menu' );
-    add_submenu_page( 'wazScaler', "Windows Azure Scaler Schedule", "Schedule", 'activate_plugins', 'wazScaler_schedule', 'wazScale_admin_schedule_menu' );
-    add_submenu_page( 'wazScaler', "Windows Azure Scaler Settings", "Settings", 'activate_plugins', 'wazScaler_settings', 'wazScale_admin_settings_menu' );
+    add_utility_page( "Windows Azure Scaling Statistics", "WAZ Scaling", 'activate_plugins', 'wazScaling', 'wazScale_admin_menu', plugins_url() . '/' . basename(__DIR__) . '/azure-logo-icon.png' );
+    add_submenu_page( 'wazScaling', "Windows Azure Scaling Triggers", "Triggers", 'activate_plugins', 'wazScaler_triggers', 'wazScale_admin_triggers_menu' );
+    add_submenu_page( 'wazScaling', "Windows Azure Scaling Schedule", "Schedule", 'activate_plugins', 'wazScaler_schedule', 'wazScale_admin_schedule_menu' );
+    add_submenu_page( 'wazScaling', "Windows Azure Scaling Settings", "Settings", 'activate_plugins', 'wazScaler_settings', 'wazScale_admin_settings_menu' );
 }
 
-//add_action('init', 'wazScale_scale');
 
-function wazScale_scale() {
+/**
+ * Checks the triggers to determing scaling in/out needs and performs the operation
+ */
+function wazScale_scale() { 
     $scale_by = wazScale_check_triggers();
     $settings = get_option( OP_SETTINGS );
     $triggers = get_option( OP_TRIGGERS );
@@ -152,7 +184,11 @@ function wazScale_scale() {
      * visitors cannot access the filesystem and view the file
      */
     file_put_contents(sys_get_temp_dir() . "/tmpCert.pem", $settings['certificate']);
-    $management_client = new Microsoft_WindowsAzure_Management_Client($settings['subscription_id'], sys_get_temp_dir() . "/tmpCert.pem", $settings['certificate_thumbnail']);
+    if(file_exists(sys_get_temp_dir() . "/tmpCert.pem")) { echo "<b>Cert found</b>"; }
+    else { echo "<b>No cert file</b>"; }
+
+    echo "<pre>"; var_dump($settings); echo "</pre>";
+    $management_client = new Microsoft_WindowsAzure_Management_Client($settings['subscription_id'], sys_get_temp_dir() . "/tmpCert.pem", $settings['certificate_thumbprint']);
 
     // Get current number of instances - WARNING this can take some time.
     // Do not do this on a every page load
@@ -173,7 +209,13 @@ function wazScale_scale() {
     unlink( sys_get_temp_dir() . "/tmpCert.pem" );
 }
 
-
+/**
+ * Returns the number of NAMED instances
+ *
+ * @param Array $instances
+ * @param String $role_name
+ * @return Integer
+ */
 function wazScale_get_num_instances( $instances, $role_name ) {
     $count = 0;
     foreach( $instances as $instance ) {
@@ -182,6 +224,7 @@ function wazScale_get_num_instances( $instances, $role_name ) {
     }
     return $count;
 }
+
 /**
  * Checks the given performance metrics to determine whether or not to scale
  * in or out. Uses the averages of all instances to check against
@@ -190,11 +233,12 @@ function wazScale_get_num_instances( $instances, $role_name ) {
  */
 function wazScale_check_triggers() {
     $metrics = wazScale_retrieve_diagnostics();
+
     $triggers = get_option(OP_TRIGGERS);
     $scale_by = 0;
-    
 
-    if(!$triggers['manual_control']) {        
+
+    if(!$triggers['manual_control']) {
         if($metrics['TCPv4Connections_Established']['average'] > $triggers['connections_max']) {
             $scale_by = 1;
 
@@ -203,27 +247,29 @@ function wazScale_check_triggers() {
         } else if ($metrics['TCPv4Connections_Established']['average'] < $triggers['connections_min'] && $metrics['Processor(_Total)%_Processor_Time']['average'] < $triggers['cpu_min']) {
             $scale_by = -1;
         }
-        
+
     }
     return $scale_by;
 }
 
 /**
+ * Pulls the performance metrics from the local WordPress database and builds
+ * an array of information that can be used to determine scaling needs
  *
- * @param Integer $period - Minutes in the past to look for diagnostics
+ * @param Boolean $full - Default: false - Set to true for extended performance information. PERFORMANCE WARNING
  * @return Array
  */
-function wazScale_retrieve_diagnostics() {
-    add_filter( 'posts_where', 'wazScale_where_last15' );
+function wazScale_retrieve_diagnostics($full = false) {
+    //add_filter( 'posts_where', 'wazScale_where_last15' );
     $query = new WP_Query( 'post_type=' . TYPE_DIAGNOSTICS );
-    remove_filter( 'posts_where', 'wazScale_where_last15' );
+    //remove_filter( 'posts_where', 'wazScale_where_last15' );
 
     $arr = array();
    foreach($query->posts as $p) {
-       $Role = get_post_meta($p->ID, 'Role', true);
-       $RoleInstance = get_post_meta($p->ID, 'RoleInstance', true);
-       $CounterName = str_replace(' ', '_', get_post_meta($p->ID, 'CounterName', true));
-       $CounterValue = get_post_meta($p->ID, 'CounterValue', true);
+         $Role = get_post_meta($p->ID, 'Role', true);
+         $RoleInstance = get_post_meta($p->ID, 'RoleInstance', true);
+         $CounterName = str_replace(' ', '_', get_post_meta($p->ID, 'CounterName', true));
+         $CounterValue = get_post_meta($p->ID, 'CounterValue', true);
        /*
         * Create an array of
         *
@@ -243,29 +289,29 @@ function wazScale_retrieve_diagnostics() {
         * Make sure it is extensible so future diagnostics can be added
         */
 
-       // Add current value to existing total
-       $CurrentCounterValue =  (!is_null($arr[$CounterName]['total']))? $arr[$CounterName]['total']: 0;
+         // Add current value to existing total
+       $CurrentCounterValue =  (!empty($arr[$CounterName]['total']))? $arr[$CounterName]['total']: 0;
        $arr[$CounterName]['total'] = $CounterValue + $CurrentCounterValue;
 
        /*
         * Start totals
         */
        // Is this value max?
-       if(!is_null($arr[$CounterName]['max']) && $CounterValue > $arr[$CounterName]['max']) {
+       if(isset($arr[$CounterName]['max']) && !is_null($arr[$CounterName]['max']) && $CounterValue > $arr[$CounterName]['max']) {
            $arr[$CounterName]['max'] = $CounterValue;
-       } elseif(is_null($arr[$CounterName]['max'])) {
+       } elseif(!isset($arr[$CounterName]['max'])  || is_null($arr[$CounterName]['max'])) {
            $arr[$CounterName]['max'] = $CounterValue;
        }
 
        // Is this value min?
-       if(!is_null($arr[$CounterName]['min']) && $CounterValue < $arr[$CounterName]['min']) {
+       if(isset($arr[$CounterName]['min']) && !is_null($arr[$CounterName]['min']) && $CounterValue < $arr[$CounterName]['min']) {
            $arr[$CounterName]['min'] = $CounterValue;
-       } elseif(is_null($arr[$CounterName]['min'])) {
+       } elseif(!isset($arr[$CounterName]['min'])  || is_null($arr[$CounterName]['min'])) {
            $arr[$CounterName]['min'] = $CounterValue;
-       } 
-       
+       }
+
        // Set count
-       $CurrentCounterNameCount =  (!is_null($arr[$CounterName]['count']))? $arr[$CounterName]['count']: 0;
+       $CurrentCounterNameCount =  (isset($arr[$CounterName]['count']) && !is_null($arr[$CounterName]['count']))? $arr[$CounterName]['count']: 0;
        $arr[$CounterName]['count'] = 1 + $CurrentCounterNameCount;
 
        // Set average
@@ -276,25 +322,27 @@ function wazScale_retrieve_diagnostics() {
         *
         * Start individual instances
         */
-       if(!is_null($arr['instances'][$Role][$RoleInstance][$CounterName]['max']) && $CounterValue > $arr['instances'][$Role][$RoleInstance][$CounterName]['max']) {
-           $arr['instances'][$Role][$RoleInstance][$CounterName]['max'] = $CounterValue;
-       } elseif(is_null($arr['instances'][$Role][$RoleInstance][$CounterName]['max'])) {
-           $arr['instances'][$Role][$RoleInstance][$CounterName]['max'] = $CounterValue;
+       if($full) {
+           if(!empty($arr['instances'][$Role][$RoleInstance][$CounterName]['max']) && $CounterValue > $arr['instances'][$Role][$RoleInstance][$CounterName]['max']) {
+               $arr['instances'][$Role][$RoleInstance][$CounterName]['max'] = $CounterValue;
+           } elseif(empty($arr['instances'][$Role][$RoleInstance][$CounterName]['max'])) {
+               $arr['instances'][$Role][$RoleInstance][$CounterName]['max'] = $CounterValue;
+           }
+
+           // Is this value min?
+           if(!empty($arr['instances'][$Role][$RoleInstance][$CounterName]['min']) && $CounterValue < $arr['instances'][$Role][$RoleInstance][$CounterName]['min']) {
+               $arr['instances'][$Role][$RoleInstance][$CounterName]['min'] = $CounterValue;
+           } elseif(empty($arr['instances'][$Role][$RoleInstance][$CounterName]['min'])) {
+               $arr['instances'][$Role][$RoleInstance][$CounterName]['min'] = $CounterValue;
+           }
+
+           // Set count
+           $CurrentCounterNameCount =  (!empty($arr['instances'][$Role][$RoleInstance][$CounterName]['count']))? $arr['instances'][$Role][$RoleInstance][$CounterName]['count']: 0;
+           $arr['instances'][$Role][$RoleInstance][$CounterName]['count'] = 1 + $CurrentCounterNameCount;
+
+           // Set average
+          // $arr['instances'][$Role][$RoleInstance][$CounterName]['average'] = $arr['instances'][$Role][$RoleInstance][$CounterName]['total'] / $arr['instances'][$Role][$RoleInstance][$CounterName]['count'];
        }
-
-       // Is this value min?
-       if(!is_null($arr['instances'][$Role][$RoleInstance][$CounterName]['min']) && $CounterValue < $arr['instances'][$Role][$RoleInstance][$CounterName]['min']) {
-           $arr['instances'][$Role][$RoleInstance][$CounterName]['min'] = $CounterValue;
-       } elseif(is_null($arr['instances'][$Role][$RoleInstance][$CounterName]['min'])) {
-           $arr['instances'][$Role][$RoleInstance][$CounterName]['min'] = $CounterValue;
-       }
-
-       // Set count
-       $CurrentCounterNameCount =  (!is_null($arr['instances'][$Role][$RoleInstance][$CounterName]['count']))? $arr['instances'][$Role][$RoleInstance][$CounterName]['count']: 0;
-       $arr['instances'][$Role][$RoleInstance][$CounterName]['count'] = 1 + $CurrentCounterNameCount;
-
-       // Set average
-       $arr['instances'][$Role][$RoleInstance][$CounterName]['average'] = $arr['instances'][$Role][$RoleInstance][$CounterName]['total'] / $arr['instances'][$Role][$RoleInstance][$CounterName]['count'];
        /*
         * End individual instances
         */
@@ -303,7 +351,7 @@ function wazScale_retrieve_diagnostics() {
 }
 
 /**
- *  Alters the query string to only retrieve that last 15 minutes of posts
+ *  Alters the database query string to only retrieve that last 15 minutes of posts
  *
  * @param Sstring $where
  * @return String
@@ -315,15 +363,16 @@ function wazScale_where_last15( $where = '' ) {
 }
 
 
+
+
 /**
- * Code to move diagnostics information from the Windows Azure storage table
- * into the WordPress database
+ * Retreives the diagnostics from the Windows Azure storage account connected to
+ * the running instances. This data is then inserted into the WordPress database
+ * as a custom post type for quick calculations and historical purposes.
  */
-function wazScale_diagnostics_transfer() {
+function wazScale_diagnostics_transfer() { echo "<b>Not actually transferring diagnostics during debug</b>"; return true;
     $ops = get_option('wazScale_settings');
-   // var_dump($ops['storage_key']);
-    //echo "Connecting with endpoint: {$ops['storage_endpoint']} and key {$ops['storage_key']}";
-    //echo '<pre>';
+   
 
     $table = new Microsoft_WindowsAzure_Storage_Table(
         Microsoft_WindowsAzure_Storage::URL_CLOUD_TABLE,
@@ -364,28 +413,11 @@ function wazScale_diagnostics_transfer() {
     }
 }
 
-/**
- * Used to add the additional schedules for WordPress cron
- * @param Array $schedules
- * @return Array
- */
-function wazScale_additional_crons( $schedules ) {
- 	// Adds once weekly to the existing schedules.
- 	$schedules['weekly'] = array(
- 		'interval' => 604800,
- 		'display' => __( 'Once Weekly' )
- 	);
-        $schedules['15minutes'] = array(
-                'interval' => 900,
-                'display' => __('Every 15 Minutes')
-        );
-        $schedules['5minutes'] = array(
-                'interval' => 300,
-                'display' => __('Every 5 Minutes')
-        );
- 	return $schedules;
- }
 
+
+/**
+ * Creates the custom post type that the diagnostics information will be stored in
+ */
 function wazScale_diagnostics_post_type() {
   $labels = array(
     'name' => __('Windows Azure Diagnostic Information (Move into WAZ Scaler Menu)'),
@@ -406,6 +438,10 @@ function wazScale_diagnostics_post_type() {
   register_post_type(TYPE_DIAGNOSTICS,$args);
 }
 
+/**
+ * Quick debugging tool
+ * @param Mixed $what
+ */
 function wazScale_debug($what) {
    echo '<pre>';
    var_dump($what);
@@ -446,12 +482,6 @@ function wazScale_check_settings() {
     }
 }
 
-/**
-  * Call showAdminMessages() when showing other admin
-  * messages. The message only gets shown in the admin
-  * area, but not on the frontend of your WordPress site.
-  */
-add_action('admin_notices', 'wazScale_check_settings');
 
  /* ****************************************************************************
  * **************************** END FUNCTIONS **********************************

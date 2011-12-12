@@ -1,8 +1,7 @@
 <?php
-global $wp;
-// Security measure to prevent deactivate exploits
-if(!isset($wp)) { die('Must be run from a WordPress instance'); }
-
+/*
+ * This file will be run when the plugin is deactivated
+ */
 
 wp_clear_scheduled_hook('wazScale_diagnostics_transfer');
 wp_clear_scheduled_hook('wazScale_scale');
