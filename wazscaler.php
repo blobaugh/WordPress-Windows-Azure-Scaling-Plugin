@@ -370,7 +370,7 @@ function wazScale_where_last15( $where = '' ) {
  * the running instances. This data is then inserted into the WordPress database
  * as a custom post type for quick calculations and historical purposes.
  */
-function wazScale_diagnostics_transfer() { echo "<b>Not actually transferring diagnostics during debug</b>"; return true;
+function wazScale_diagnostics_transfer() { //echo "<b>Not actually transferring diagnostics during debug</b>"; return true;
     $ops = get_option('wazScale_settings');
    
 
